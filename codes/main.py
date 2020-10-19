@@ -72,6 +72,7 @@ if __name__=='__main__':
 	parse.add_argument('--num_classes', type=int, default=100)
 	parse.add_argument('--image_feat_dim', type=int, default=2048)
 	parse.add_argument('--device',type=str, default='cuda')
+	parse.add_argument('--log_id',type=str)
 	args = parse.parse_args()
 	#word2vec = Word2Vec() 
 	if args.dataset=='cifar_fs':

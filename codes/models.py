@@ -195,7 +195,7 @@ class Word2Vec(nn.Module):
 	def __init__(self,args):
 		super(Word2Vec, self).__init__()
 		self.args = args
-		self.word2vec = FastText() #gensim.models.KeyedVectors.load_word2vec_format('/home/SharedData/Divakar/cvpr/GoogleNews-vectors-negative300.bin', binary=True)
+		self.word2vec = FastText(cache='/home/SharedData/Divakar/project2/data/FastText') #gensim.models.KeyedVectors.load_word2vec_format('/home/SharedData/Divakar/cvpr/GoogleNews-vectors-negative300.bin', binary=True)
 		
 	def forward(self, words):
 		#words = words.reshape(self.args.batch_size,1)
