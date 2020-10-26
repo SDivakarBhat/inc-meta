@@ -11,6 +11,7 @@ from torchmeta.utils.prototype import get_prototypes, prototypical_loss
 import numpy as np
 from gensim.models import fasttext
 from gensim.test.utils import datapath
+
 class Flatten(nn.Module):
 	def __init__(self):
 		super(Flatten, self).__init__()
@@ -44,7 +45,7 @@ class EmbedBranch(nn.Module):
 		return x
 
 class Model(nn.Module):
-	def __init__(self, args, num_classes_per_task):
+	def __init__(self, args, num_classes_per_task, save_dir=None):
 		super(Model, self).__init__()
 		self.encoder = UNetWithResnet50Encoder().cuda()
 		self.decoder = UNetWithResnet50Decoder().cuda()
@@ -62,13 +63,24 @@ class Model(nn.Module):
 		self.visual2word = embedding(args.image_feat_dim, embedding_dim, metric_dim)
 		self.visual2word_mse = nn.MSELoss()
 		self.classifier = Classifier(int(metric_dim*2), args.num_base_classes)	
+		self.target_classifier = Classifier(int(metric_dim*2),args.num_base_classes)
 		self.reconstruction_loss = nn.MSELoss()
+		self.save_dir = save_dir
 		if self.args.dataset =='miniimagenet':
 			self.d = {}
 			with open("miniimagenet_trainsplit.txt") as f:
     				for line in f:
        					(key, val) = line.split()
        					self.d[str(key)] = str(val)
+		if save_dir:
+			checkpoint = torch.load(save_dir)
+			self.decoder.load_state_dict(checkpoint['decoder'])
+			self.text_branch.load_state_dict(checkpoint['text_branch'])
+			self.image_branch.load_state_dict(checkpoint['image_branch'])
+			self.visual2word.load_state_dict(checkpoint['visual2word'])
+			self.classifier.load_state_dict(checkpoint['base_classifier'])
+			self.target_classifier.load_state_dict(checkpoint['base_classifier'])
+
 		#print('d',self.d)	
 	def triplet_loss(self, inputs, targets):
 		
@@ -89,41 +101,57 @@ class Model(nn.Module):
 				'base_classifier':self.classifier
 			
 				}, save_path)
+	def target_save(self, save_path):
+		torch.save({
+				
+				'decoder':self.decoder.state_dict(),
+				'text_branch':self.text_branch.state_dict(),
+				'image_branch':self.image_branch.state_dict(),
+				'visual2word':self.visual2word.state_dict(),
+				'base_classifier':self.classifier,
+				'target_classifier':self.target_classifier
+			
+				}, save_path)
 
 
 	def forward(self, batch):
 		##training phase (support)
+		save_dir = self.save_dir
 		train_inputs, train_targets = batch['train']
 		train_inputs = train_inputs.cuda()
 		train_targets, train_original_labels = train_targets
 		train_original_labels = list(zip(*train_original_labels))
+		train_targets = train_targets.cuda()
 		#print(np.shape(train_original_labels))
 		#print(train_original_labels[0])#(np.transpose(np.array(train_original_labels))[:,1,:], train_targets)
-		if self.args.dataset=='cifar_fs':
+		if self.args.dataset=='cifar_fs'and not save_dir:
 			train_vecs = self.word2vec(np.transpose(np.array(train_original_labels)[:,1,:])).cuda()
-		elif self.args.dataset=='miniimagenet':
+		elif self.args.dataset=='miniimagenet'and not save_dir:
 			train_vecs = [self.d[code] for code in np.array(train_original_labels[0])]
 			#print(np.shape(np.array(train_vecs)), np.array(train_vecs))
 			train_vecs = self.word2vec(np.array(train_vecs)[np.newaxis]).cuda()
-		train_triplet_target = torch.cat((train_targets, train_targets))
-		train_targets = train_targets.cuda()
-		train_triplet_target = torch.reshape(train_triplet_target,(self.args.batch_size*self.args.num_ways*self.args.num_shots*2,1)).cuda()
+
 
 		train_visual_bridge, pre_pools  = self.encoder(train_inputs.view(-1, *train_inputs.shape[2:])) #modification required to pass concatenated features through the decoder (separate encoder decoder structure maybe needed)
 		#print(train_vecs.shape)
 		train_visual_bridge  = torch.reshape(train_visual_bridge,(train_visual_bridge.size(0), train_visual_bridge.size(1)))#train_visual_bridge.permute(0,2,1,3).squeeze(3)#self.flatten(train_visual_bridge).unsqueeze(1)
 		#print(train_visual_bridge.shape)
-		train_embed_visual = self.image_branch(train_visual_bridge)
-		train_embed_text = self.text_branch(train_vecs)	#potential err yle loss calc due2 list type vecs 
-		train_triplet_input = torch.cat((train_embed_visual, train_embed_text))
-		#train split triplet loss
-		#print(train_triplet_input.is_cuda, train_triplet_target.is_cuda)
-		train_triplet_loss = self.triplet_loss(train_triplet_input.cuda(), train_triplet_target.cuda())
+		if not save_dir:
+			train_triplet_target = torch.cat((train_targets, train_targets))
+			#train_targets = train_targets.cuda()
+			train_triplet_target = torch.reshape(train_triplet_target,(self.args.batch_size*self.args.num_ways*self.args.num_shots*2,1)).cuda()
 
-		#print('shape',np.shape(train_embed_visual),np.shape(train_embed_text))
-		#concat visual and semantic features
-		train_concat_features = torch.cat((train_embed_visual, train_embed_text), dim=1) 
-		#print('concat_dim', np.shape(train_concat_features))
+			train_embed_visual = self.image_branch(train_visual_bridge)
+			train_embed_text = self.text_branch(train_vecs)	#potential err yle loss calc due2 list type vecs 
+			train_triplet_input = torch.cat((train_embed_visual, train_embed_text))
+			#train split triplet loss
+			#print(train_triplet_input.is_cuda, train_triplet_target.is_cuda)
+			train_triplet_loss = self.triplet_loss(train_triplet_input.cuda(), train_triplet_target.cuda())
+
+			#print('shape',np.shape(train_embed_visual),np.shape(train_embed_text))
+			#concat visual and semantic features
+			train_concat_features = torch.cat((train_embed_visual, train_embed_text), dim=1) 
+			#print('concat_dim', np.shape(train_concat_features))
 	
 
 		##testing phase (query)
@@ -133,55 +161,77 @@ class Model(nn.Module):
 		test_targets, test_original_labels = test_targets
 		#print(np.shape(test_targets))
 		test_original_labels = list(zip(*test_original_labels))
+		test_targets = test_targets.to(self.args.device)
+
 		if self.args.dataset=='cifar_fs':
 			test_vecs = self.word2vec(np.transpose(np.array(test_original_labels)[:,1,:])).cuda()
 		elif self.args.dataset=='miniimagenet':
 			test_vecs = [self.d[code] for code in np.array(test_original_labels[0])]
 			test_vecs = self.word2vec(np.array(test_vecs)[np.newaxis]).cuda()
 		#test_vecs = self.word2vec(np.transpose(np.array(test_original_labels)[:,1,:])).cuda()
-		test_triplet_target = torch.cat((test_targets, test_targets))
-		test_targets = test_targets.to(self.args.device)
-		test_triplet_target = test_triplet_target.cuda()
-		test_triplet_target = torch.reshape(test_triplet_target,(self.args.batch_size*self.args.num_ways*self.args.num_test_shots*2,1)).cuda()
-
 		test_visual_bridge, test_pre_pools = self.encoder(test_inputs.view(-1, *test_inputs.shape[2:])) #modification required to pass concatenated features through the decoder (separate encoder decoder structure maybe needed)
 		test_visual_bridge  = torch.reshape(test_visual_bridge,(test_visual_bridge.size(0), test_visual_bridge.size(1)))
+		#print(train_visual_bridge.shape)
+		if not save_dir:
+			test_triplet_target = torch.cat((test_targets, test_targets))
+			test_triplet_target = test_triplet_target.cuda()
+			test_triplet_target = torch.reshape(test_triplet_target,(self.args.batch_size*self.args.num_ways*self.args.num_test_shots*2,1)).cuda()
+
+
+			test_embed_visual = self.image_branch(test_visual_bridge)
+			test_embed_text = self.text_branch(test_vecs)	#potential err yle loss calc due2 list type vecs 
+			test_triplet_input = torch.cat((test_embed_visual, test_embed_text))
+
+			#concat visual and semantic featurs
+			test_concat_features = torch.cat((test_embed_visual, test_embed_text), dim=1) 
+
+
+			#test split triplet loss
+			test_triplet_loss = self.triplet_loss(test_triplet_input.cuda(), test_triplet_target.cuda())
+
+		
+
+
+			#reconstruct image
+			train_decoder_out = self.decoder(train_concat_features.reshape(self.args.batch_size*self.args.num_shots*self.args.num_ways,self.args.image_feat_dim,1,1), pre_pools)
+			test_decoder_out = self.decoder(test_concat_features.reshape(self.args.batch_size*self.args.num_test_shots*self.args.num_ways,self.args.image_feat_dim,1,1), test_pre_pools)
+			#reconstruction loss
+			train_recon_loss = self.reconstruction_loss(train_decoder_out.unsqueeze(0),train_inputs)
+			test_recon_loss = self.reconstruction_loss(test_decoder_out.unsqueeze(0), test_inputs)
+	
+			#learn visual to word embedding
+			visual2word_out_train = self.visual2word(train_visual_bridge)
+			visual2word_loss_train = self.visual2word_mse(visual2word_out_train, train_embed_text)
+
+			visual2word_out_test = self.visual2word(test_visual_bridge)
+			visual2word_loss_test = self.visual2word_mse(visual2word_out_test, test_embed_text)
+
+
+		#learn visual to word embedding
+		visual2word_out_train = self.visual2word(train_visual_bridge)
+		#visual2word_loss_train = self.visual2word_mse(visual2word_out_train, train_embed_text)
+
+		visual2word_out_test = self.visual2word(test_visual_bridge)
+		#visual2word_loss_test = self.visual2word_mse(visual2word_out_test, test_embed_text)
+		train_embed_visual = self.image_branch(train_visual_bridge)
 		test_embed_visual = self.image_branch(test_visual_bridge)
-		test_embed_text = self.text_branch(test_vecs)	#potential err yle loss calc due2 list type vecs 
-		test_triplet_input = torch.cat((test_embed_visual, test_embed_text))
-
-		#concat visual and semantic featurs
-		test_concat_features = torch.cat((test_embed_visual, test_embed_text), dim=1) 
-
-
-		#test split triplet loss
-		test_triplet_loss = self.triplet_loss(test_triplet_input.cuda(), test_triplet_target.cuda())
-
-
+		train_concat_features = torch.cat((train_embed_visual, visual2word_out_train), dim=1) 
+		test_concat_features = torch.cat((test_embed_visual, visual2word_out_test), dim=1) 
 		#concatenated featurs thru FC layers
 		if self.args.phase =='base':
 			train_embeddings = self.classifier(train_concat_features)
 			test_embeddings = self.classifier(test_concat_features)
 		else:
-			train_embeddings = self.test_classifier(train_concat_features)
-			test_embeddings = self.test_classifier(test_concat_features)	
+			train_embeddings = self.target_classifier(train_concat_features)
+			test_embeddings = self.target_classifier(test_concat_features)	
+			dummy_train_embeddings = self.classifier(train_concat_features)
+			dummy_test_embeddings = self.classifier(test_concat_features)	
+	
+			dummy_prototypes = get_prototypes(dummy_train_embeddings.unsqueeze(0), dummy_train_targets, self.num_classes_per_task)
+			dummy_accuracy, dummy_logpy = get_accuracy(dummy_prototypes, dummy_test_embeddings.unsqueeze(0), test_targets)
 
 
 
-		#learn visual to word embedding
-		visual2word_out = self.visual2word(train_visual_bridge)
-		visual2word_loss_train = self.visual2word_mse(visual2word_out, train_embed_text)
-
-		visual2word_out = self.visual2word(test_visual_bridge)
-		visual2word_loss_test = self.visual2word_mse(visual2word_out, test_embed_text)
-
-
-		#reconstruct image
-		train_decoder_out = self.decoder(train_concat_features.reshape(self.args.batch_size*self.args.num_shots*self.args.num_ways,self.args.image_feat_dim,1,1), pre_pools)
-		test_decoder_out = self.decoder(test_concat_features.reshape(self.args.batch_size*self.args.num_test_shots*self.args.num_ways,self.args.image_feat_dim,1,1), test_pre_pools)
-		#reconstruction loss
-		train_recon_loss = self.reconstruction_loss(train_decoder_out.unsqueeze(0),train_inputs)
-		test_recon_loss = self.reconstruction_loss(test_decoder_out.unsqueeze(0), test_inputs)
 
 		#fsl
 		#print('prot',np.shape(test_embeddings.unsqueeze(0)),np.shape(test_targets), np.shape(self.num_classes_per_task))
@@ -191,14 +241,19 @@ class Model(nn.Module):
 		
 
 		##total loss
-		loss = fsl_loss + train_triplet_loss + test_triplet_loss + visual2word_loss_train + visual2word_loss_test + train_recon_loss + test_recon_loss
-		
+		if not save_dir:
+			loss = fsl_loss + train_triplet_loss + test_triplet_loss + visual2word_loss_train + visual2word_loss_test + train_recon_loss + test_recon_loss
+		else:
+			loss = fsl_loss  
+	
 
 		##accuracy calculation
-		accuracy, log_py = get_accuracy(prototypes, test_embeddings.unsqueeze(0), test_targets)
+		accuracy, logpy = get_accuracy(prototypes, test_embeddings.unsqueeze(0), test_targets)
 		#print(np.array(test_original_labels)[:,1,:])
-		
-		return loss, accuracy, log_py
+		if not save_dir:
+			return loss, accuracy, logpy
+		else:
+			return loss, accuracy, logpy, dummy_logpy
  
 
 class Word2Vec(nn.Module):
@@ -268,4 +323,3 @@ class Classifier(nn.Module):
 		return self.classifier(x)
 
 			
-

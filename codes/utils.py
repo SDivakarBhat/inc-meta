@@ -1,6 +1,7 @@
 import torch
 import numpy as np
 import torch.nn.functional as F
+from torch.utils.tensorboard import SummaryWriter
 
 def get_accuracy(prototypes, embeddings, targets):
     """Compute the accuracy of the prototypical network on the test/query points.
@@ -22,12 +23,12 @@ def get_accuracy(prototypes, embeddings, targets):
     """
     sq_distances = torch.sum((prototypes.unsqueeze(2)
         - embeddings.unsqueeze(1)) ** 2, dim=-1)
-    #logpy =  F.cross_entropy(-squared_distances, targets, **kwargs)
+    logpy =  F.cross_entropy(-sq_distances, targets)
     #print('dist',np.shape(sq_distances))
     _, predictions = torch.min(sq_distances, dim=-2)
     #print('pred shape',np.shape(predictions),predictions)
     acc = torch.eq(predictions,targets.squeeze()).float().mean()
     #print('acc',acc)
-    return torch.mean(predictions.eq(targets).float())
+    return torch.mean(predictions.eq(targets).float()), logpy
 
 
