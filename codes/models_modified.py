@@ -59,7 +59,8 @@ class Model(nn.Module):
 		self.flatten = Flatten()
 		self.text_branch = EmbedBranch(token_dim, embedding_dim, metric_dim)
 		self.image_branch = EmbedBranch(args.image_feat_dim, embedding_dim, metric_dim)
-		self.word2vec = Word2Vec(args)
+		if not save_dir:		
+			self.word2vec = Word2Vec(args)
 		self.visual2word = embedding(args.image_feat_dim, embedding_dim, metric_dim)
 		self.visual2word_mse = nn.MSELoss()
 		self.classifier = Classifier(int(metric_dim*2), args.num_base_classes)	
@@ -80,6 +81,9 @@ class Model(nn.Module):
 			self.visual2word.load_state_dict(checkpoint['visual2word'])
 			self.classifier.load_state_dict(checkpoint['base_classifier'])
 			self.target_classifier.load_state_dict(checkpoint['base_classifier'])
+			for param in self.classifier.parameters():
+            			param.requires_grad=False
+
 
 		#print('d',self.d)	
 	def triplet_loss(self, inputs, targets):
@@ -98,7 +102,7 @@ class Model(nn.Module):
 				'text_branch':self.text_branch.state_dict(),
 				'image_branch':self.image_branch.state_dict(),
 				'visual2word':self.visual2word.state_dict(),
-				'base_classifier':self.classifier
+				'base_classifier':self.classifier.state_dict()
 			
 				}, save_path)
 	def target_save(self, save_path):
@@ -108,8 +112,8 @@ class Model(nn.Module):
 				'text_branch':self.text_branch.state_dict(),
 				'image_branch':self.image_branch.state_dict(),
 				'visual2word':self.visual2word.state_dict(),
-				'base_classifier':self.classifier,
-				'target_classifier':self.target_classifier
+				'base_classifier':self.classifier.state_dict(),
+				'target_classifier':self.target_classifier.state_dict()
 			
 				}, save_path)
 
@@ -163,9 +167,9 @@ class Model(nn.Module):
 		test_original_labels = list(zip(*test_original_labels))
 		test_targets = test_targets.to(self.args.device)
 
-		if self.args.dataset=='cifar_fs':
+		if self.args.dataset=='cifar_fs' and not save_dir:
 			test_vecs = self.word2vec(np.transpose(np.array(test_original_labels)[:,1,:])).cuda()
-		elif self.args.dataset=='miniimagenet':
+		elif self.args.dataset=='miniimagenet'and not save_dir:
 			test_vecs = [self.d[code] for code in np.array(test_original_labels[0])]
 			test_vecs = self.word2vec(np.array(test_vecs)[np.newaxis]).cuda()
 		#test_vecs = self.word2vec(np.transpose(np.array(test_original_labels)[:,1,:])).cuda()
@@ -215,19 +219,19 @@ class Model(nn.Module):
 		#visual2word_loss_test = self.visual2word_mse(visual2word_out_test, test_embed_text)
 		train_embed_visual = self.image_branch(train_visual_bridge)
 		test_embed_visual = self.image_branch(test_visual_bridge)
-		train_concat_features = torch.cat((train_embed_visual, visual2word_out_train), dim=1) 
-		test_concat_features = torch.cat((test_embed_visual, visual2word_out_test), dim=1) 
+		train_concat_features_target = torch.cat((train_embed_visual, visual2word_out_train), dim=1) 
+		test_concat_features_target = torch.cat((test_embed_visual, visual2word_out_test), dim=1) 
 		#concatenated featurs thru FC layers
 		if self.args.phase =='base':
 			train_embeddings = self.classifier(train_concat_features)
 			test_embeddings = self.classifier(test_concat_features)
 		else:
-			train_embeddings = self.target_classifier(train_concat_features)
-			test_embeddings = self.target_classifier(test_concat_features)	
-			dummy_train_embeddings = self.classifier(train_concat_features)
-			dummy_test_embeddings = self.classifier(test_concat_features)	
+			train_embeddings = self.target_classifier(train_concat_features_target)
+			test_embeddings = self.target_classifier(test_concat_features_target)	
+			dummy_train_embeddings = self.classifier(train_concat_features_target)
+			dummy_test_embeddings = self.classifier(test_concat_features_target)	
 	
-			dummy_prototypes = get_prototypes(dummy_train_embeddings.unsqueeze(0), dummy_train_targets, self.num_classes_per_task)
+			dummy_prototypes = get_prototypes(dummy_train_embeddings.unsqueeze(0), train_targets, self.num_classes_per_task)
 			dummy_accuracy, dummy_logpy = get_accuracy(dummy_prototypes, dummy_test_embeddings.unsqueeze(0), test_targets)
 
 

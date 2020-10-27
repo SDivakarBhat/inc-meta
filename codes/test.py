@@ -1,7 +1,7 @@
 import torch
 import torch.nn as nn
 from torchmeta.datasets.helpers import cifar_fs, miniimagenet
-from models import Model, Word2Vec
+from models_modified import Model, Word2Vec
 from torchmeta.utils.data import BatchMetaDataLoader
 from torchmeta.transforms import Categorical
 from tqdm import tqdm
@@ -56,6 +56,7 @@ if __name__=='__main__':
 	parse.add_argument('--phase', type=str, default='test')	
 	parse.add_argument('--data_folder',type=str, default='/home/SharedData/Divakar/project2/data',help='path to the data roo folder')
 	parse.add_argument('--log_dir',type=str, default='/home/SharedData/Divakar/project2/log',help='path to the log roo folder')
+	parse.add_argument('--save_dir',type=str, default='/home/SharedData/Divakar/project2/saved',help='path to the log roo folder')
 
 	parse.add_argument('--num_shots', type=int, default=5, help='number of samples per class per episode in train split')
 	parse.add_argument('--num_test_shots', type=int, default=15, help='number of samples per class per episode in test split')
@@ -67,7 +68,7 @@ if __name__=='__main__':
 	parse.add_argument('-use_cuda', type=bool, default=True)
 	parse.add_argument('--lr', type=float, default=1e-3, help='learning rate')
 	parse.add_argument('--wd', type=float, default=5e-4, help='weight decay')
-	parse.add_argument('--max_epoch', type=int, default=1000)
+	parse.add_argument('--max_epoch', type=int, default=500)
 	parse.add_argument('--max_episode',type=int, default=100)
 	parse.add_argument('--step_size',type=int, default=20)
 	parse.add_argument('--gamma', type=float, default=0.5)
@@ -103,6 +104,7 @@ if __name__=='__main__':
 				target_transform=CategoricalAndLabels(num_classes=5),
 				download=args.download)
 		log_dir = args.log_dir+'/{}'.format(args.dataset)+args.phase+args.log_id
+		old_save_dir =  args.save_dir+'/{}'.format(args.dataset)+'base'+args.log_id+'.pth'
 		save_dir = args.save_dir+'/{}'.format(args.dataset)+args.phase+args.log_id+'.pth'
 
 	elif args.dataset=='miniimagenet':
@@ -129,6 +131,7 @@ if __name__=='__main__':
 				target_transform=CategoricalAndLabels(num_classes=5),
 				download=args.download)
 		log_dir = args.log_dir + '/{}'.format(args.dataset)+args.phase+args.log_id
+		old_save_dir =  args.save_dir+'/{}'.format(args.dataset)+'base'+args.log_id+'.pth'
 		save_dir = args.save_dir+'/{}'.format(args.dataset)+args.phase+args.log_id+'.pth'
 
 	train_dataloader = BatchMetaDataLoader(
@@ -141,7 +144,7 @@ if __name__=='__main__':
 					batch_size=args.batch_size,
 					shuffle=True,
 					num_workers=args.num_workers)
-	model = Model(args, test_dataset.num_classes_per_task, save_dir).cuda() 
+	model = Model(args, test_dataset.num_classes_per_task, old_save_dir).cuda() 
 
 	test(train_dataloader, test_dataloader, model, log_dir, save_dir)
 

@@ -86,7 +86,7 @@ class Model(nn.Module):
 				'text_branch':self.text_branch.state_dict(),
 				'image_branch':self.image_branch.state_dict(),
 				'visual2word':self.visual2word.state_dict(),
-				'base_classifier':self.classifier
+				'base_classifier':self.classifier.state_dict()
 			
 				}, save_path)
 
