@@ -2,6 +2,7 @@
 Written by S Divakar Bhat
 Lab: Vision and Image Processing Lab, EE Dept, IIT Bombay
 """
+import torch
 import torch.nn as nn
 import torch.functional as F
 # import numpy as np
@@ -50,7 +51,7 @@ class Discriminator(nn.Module):
     between the real and generated fake samples
     """
 
-    def __init__(self):
+    def __init__(self, args):
         super(Discriminator, self).__init__()
         self.conv1 = nn.Conv2d(1, 32, kernel_size=3, stride=2, padding=1)
         self.conv2 = nn.Conv2d(32, 64, kernel_size=3, stride=2, padding=1)

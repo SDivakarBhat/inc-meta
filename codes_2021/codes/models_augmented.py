@@ -10,6 +10,7 @@ from utils import get_accuracy
 from torchmeta.utils.prototype import get_prototypes, prototypical_loss
 from gensim.models import fasttext
 # from gensim.test.utils import datapath
+from augmenter import Generator, Discriminator
 
 
 class Flatten(nn.Module):
@@ -73,6 +74,8 @@ class Model(nn.Module):
 		self.visual2word_mse = nn.MSELoss()
 		self.classifier = Classifier(int(metric_dim*2), args.num_base_classes)	
 		self.target_classifier = Classifier(int(metric_dim*2),args.num_base_classes)
+                self.gen = Generator(args.z_dim)
+                self.dis = Discriminator()
 		#self.reconstruction_loss = nn.MSELoss()
 		self.save_dir = save_dir
 		if self.args.dataset =='miniimagenet':
@@ -87,10 +90,9 @@ class Model(nn.Module):
 			self.text_branch.load_state_dict(checkpoint['text_branch'])
 			self.image_branch.load_state_dict(checkpoint['image_branch'])
 			self.visual2code.load_state_dict(checkpoint['visual2code'])
-			self.code2word.load_state_dict(checkpoint['code2word'])
-			self.classifier.load_state_dict(checkpoint['base_classifier'])
-			self.target_classifier.load_state_dict(checkpoint['base_classifier'])
-			
+		        self.code2word.load_state_dict(checkpoint['code2word'])
+		        self.classifier.load_state_dict(checkpoint['base_classifier'])
+	                self.target_classifier.load_state_dict(checkpoint['base_classifier'])		
 			for param in self.classifier.parameters():
             			param.requires_grad=False
 			for param in self.text_branch.parameters():

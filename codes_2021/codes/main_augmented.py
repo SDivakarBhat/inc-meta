@@ -1,5 +1,5 @@
 import torch
-import torch.nn as nn
+# import torch.nn as nn
 from torchmeta.datasets.helpers import cifar_fs, miniimagenet
 from models import Model
 from torchmeta.utils.data import BatchMetaDataLoader
@@ -35,7 +35,7 @@ def train(dataloader, model, log_dir, save_dir, args_path):
     #                                            gamma=ARGS.gamma)
     epoch = 0
     writer = SummaryWriter(log_dir=log_dir)
-    F = open(args_path, "a")
+    _file = open(args_path, "a")
     while epoch < ARGS.max_epoch:
         model.train()
 
@@ -76,10 +76,10 @@ def train(dataloader, model, log_dir, save_dir, args_path):
         writer.add_scalar('v2w train', (sum(v2w1_)/len(v2w1_)), epoch)
         writer.add_scalar('v2w_test', (sum(v2w2_)/len(v2w2_)), epoch)
         # writer.add_scalar('recon train',(sum(recon1_)/len(recon1_)),epoch)
-        f.write("Epoch {:0.2f} accuracy is {:0.2f}\n"
-                .format(epoch+1, (sum(meter)/len(meter))))
+        _file.write("Epoch {:0.2f} accuracy is {:0.2f}\n"
+                    .format(epoch+1, (sum(meter)/len(meter))))
         model.base_save(save_dir)
-    F.close()
+    _file.close()
 
 
 if __name__ == '__main__':
@@ -137,10 +137,10 @@ if __name__ == '__main__':
     ARGS = PARSE.parse_args()
     # word2vec = Word2Vec()
     print(ARGS)
-    args_path = ARGS.log_dir+'/{}_{}.txt'.format(ARGS.dataset, ARGS.log_id)
-    f = open(args_path, "w")
-    f.write(str(ARGS))
-    f.close()
+    ARGS_PATH = ARGS.log_dir+'/{}_{}.txt'.format(ARGS.dataset, ARGS.log_id)
+    FILE = open(ARGS_PATH, "w")
+    FILE.write(str(ARGS))
+    FILE.close()
     if ARGS.dataset == 'cifar_fs':
         DATASET = cifar_fs(
                         ARGS.data_folder,
@@ -151,8 +151,10 @@ if __name__ == '__main__':
                         meta_train=True,
                         target_transform=CategoricalAndLabels(num_classes=5),
                         download=ARGS.download)
-        log_dir = ARGS.log_dir+'/{}'.format(ARGS.dataset)+ARGS.phase+ARGS.log_id
-        save_dir = ARGS.save_dir+'/{}'.format(ARGS.dataset)+ARGS.phase+ARGS.log_id+'.pth'
+        LOG_DIR = ARGS.log_dir + '/{}'.format(ARGS.dataset)\
+                               + ARGS.phase + ARGS.log_id
+        SAVE_DIR = ARGS.save_dir + '/{}'.format(ARGS.dataset)\
+                                 + ARGS.phase + ARGS.log_id + '.pth'
     elif ARGS.dataset == 'miniimagenet':
         DATASET = miniimagenet(
                         ARGS.data_folder,
@@ -164,13 +166,15 @@ if __name__ == '__main__':
                         transform=Compose([Resize(32), ToTensor()]),
                         target_transform=CategoricalAndLabels(num_classes=5),
                         download=ARGS.download)
-        log_dir = ARGS.log_dir + '/{}'.format(ARGS.dataset)+ARGS.phase+ARGS.log_id
-        save_dir = ARGS.save_dir+'/{}'.format(ARGS.dataset)+ARGS.phase+ARGS.log_id+'.pth'
+        LOG_DIR = ARGS.log_dir + '/{}'.format(ARGS.dataset)\
+                               + ARGS.phase + ARGS.log_id
+        SAVE_DIR = ARGS.save_dir + '/{}'.format(ARGS.dataset)\
+                                 + ARGS.phase+ARGS.log_id + '.pth'
 
     TRAIN_DATALOADER = BatchMetaDataLoader(DATASET,
                                            batch_size=ARGS.batch_size,
                                            shuffle=True,
                                            num_workers=ARGS.num_workers)
-    MODEL = Model(ARGS. DATASET.num_classes_per_task).cuda()
+    MODEL = Model(ARGS, DATASET.num_classes_per_task).cuda()
 
-    train(TRAIN_DATALOADER, MODEL, log_dir, save_dir, args_path)
+    train(TRAIN_DATALOADER, MODEL, LOG_DIR, SAVE_DIR, ARGS_PATH)
