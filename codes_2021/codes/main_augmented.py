@@ -1,7 +1,8 @@
 import torch
-# import torch.nn as nn
+import torch.functional as F
 from torchmeta.datasets.helpers import cifar_fs, miniimagenet
 from models import Model
+from augmenter import Generator, Discriminator
 from torchmeta.utils.data import BatchMetaDataLoader
 from torchmeta.transforms import Categorical
 from tqdm import tqdm
@@ -21,7 +22,7 @@ class CategoricalAndLabels(Categorical):
         return (self.classes[target], label)
 
 
-def train(dataloader, model, log_dir, save_dir, args_path):
+def train(dataloader, model, gen, dis, log_dir, save_dir, args_path):
     """
     Training function
     """
@@ -31,6 +32,8 @@ def train(dataloader, model, log_dir, save_dir, args_path):
     optimizer = torch.optim.Adam(filter(lambda p: p.requires_grad,
                                         Model.parameters()), lr=ARGS.lr,
                                  weight_decay=ARGS.wd)
+    gen_optim = torch.optim.Adam(gen.parameters(), lr=ARGS.gen_lr)
+    dis_optim = torch.optim.Adam(dis.parametere(), lr=ARGS.dis_lr)
     # scheduler = torch.optim.lr_scheduler.StepLR(optimizer, ARGS.step_size,
     #                                            gamma=ARGS.gamma)
     epoch = 0
@@ -51,9 +54,31 @@ def train(dataloader, model, log_dir, save_dir, args_path):
                   desc='Epoch {:d}'.format(epoch+1)) as pbar:
             for idx, sample in enumerate(pbar):
                 optimizer.zero_grad()
+                batch_size = sample.shape[0]
+                real_labels = torch.ones(batch_size, 1)
+                fake_labels = torch.zeros(batch_size, 1)
+                z_noise = torch.randn(batch_size, ARGS.zdim)
+
                 loss, accuracy, logpy, v2w1, v2w2 = model(sample)
                 loss.backward()
                 optimizer.step()
+
+                dis_real = dis(sample)
+                dis_fake = dis(gen(z_noise))
+                dis_real_loss = F.binary_cross_entropy(dis_real, real_labels)
+                dis_fake_loss = F.binary_cross_entropy(dis_fake, fake_labels)
+                dis_loss = dis_fake_loss + dis_real_loss
+                dis_optim.zero_grad()
+                dis_loss.backward()
+                dis_optim.step()
+
+                z_noise = torch.randn(batch_size, ARGS.zdim)
+                dis_fake = dis(gen(z_noise))
+                gen_loss = F.binary_cross_entropy(dis_fake, real_labels)
+                gen_optim.zero_grad()
+                gen_loss.backward()
+                gen_optim.step()
+
                 meter.append(accuracy)
                 entrpy.append(logpy)
                 # trip1_.append(trip1)
@@ -118,6 +143,10 @@ if __name__ == '__main__':
     PARSE.add_argument('--num_workers', type=int, default=1)
     PARSE.add_argument('-use_cuda', type=bool, default=True)
     PARSE.add_argument('--lr', type=float, default=1e-4, help='learning rate')
+    PARSE.add_argument('--gen_lr', type=float, default=0.02, help='learning \
+                       rate')
+    PARSE.add_argument('--dis_lr', type=float, default=0.02, help='learning \
+                       rate')
     PARSE.add_argument('--wd', type=float, default=1e-4, help='weight decay')
     PARSE.add_argument('--max_epoch', type=int, default=1000)
     PARSE.add_argument('--max_episode', type=int, default=100)
@@ -129,6 +158,7 @@ if __name__ == '__main__':
     PARSE.add_argument('--num_target_classes', type=int, default=20)
     PARSE.add_argument('--embedding_dim', type=int, default=512)
     PARSE.add_argument('--metric_dim', type=int, default=1024)
+    PARSE.add_argument('--zdim', type=int, default=100)
     PARSE.add_argument('--num_classes', type=int, default=100)
     PARSE.add_argument('--image_feat_dim', type=int, default=2048)
     PARSE.add_argument('--device', type=str, default='cuda')
@@ -176,5 +206,6 @@ if __name__ == '__main__':
                                            shuffle=True,
                                            num_workers=ARGS.num_workers)
     MODEL = Model(ARGS, DATASET.num_classes_per_task).cuda()
-
-    train(TRAIN_DATALOADER, MODEL, LOG_DIR, SAVE_DIR, ARGS_PATH)
+    GEN = Generator(ARGS.zdim)
+    DIS = Discriminator(ARGS)
+    train(TRAIN_DATALOADER, MODEL, GEN, DIS, LOG_DIR, SAVE_DIR, ARGS_PATH)
