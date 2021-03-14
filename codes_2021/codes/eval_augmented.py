@@ -9,7 +9,7 @@ from torch.utils.tensorboard import SummaryWriter
 from torchvision.transforms import Compose, Resize, ToTensor
 # def train_embedding():
 # import random
-
+from augmenter import Generator, Discriminator
 
 class CategoricalAndLabels(Categorical):
     """
@@ -21,7 +21,7 @@ class CategoricalAndLabels(Categorical):
         return (self.classes[target], label)
 
 
-def test(train_dataloader, test_dataloader, model, log_dir):
+def test(train_dataloader, test_dataloader, model, gen, log_dir):
     """
     Training function
     """
@@ -62,9 +62,17 @@ def test(train_dataloader, test_dataloader, model, log_dir):
         with tqdm(train_dataloader, total=ARGS.max_episode) as pbar:
             for idx, sample in enumerate(pbar):
                 optimizer.zero_grad()
+                imgs, lbls = sample['train']
+                batch_size = np.shape(imgs.view(-1, *imgs.shape[2:]))[0]
+                z_noise = torch.randn(batch_size, args.zdim, device=args.aug_gpu)
+                fake = gen(z_noise)
                 accuracy, loss = model(sample)
                 loss.backward()
                 optimizer.step()
+                accuracy, loss = model(fake, flag='fake')
+                loss.backward()
+                optimizer.step()
+
                 meter_base.append(accuracy)
                 # entrpy_base.append(lp)
                 # base_entrpy.append(blp)
@@ -201,6 +209,8 @@ if __name__ == '__main__':
                                      + 'base' + ARGS.log_id+'.pth'
         # save_dir = ARGS.save_dir+'/{}'.format(ARGS.dataset)\
         #                         +ARGS.phase+ARGS.log_id+'.pth'
+    GEN_PATH = ARGS.save_dir + '/{}'.format(ARGS.dataset)\
+                                     + 'base' + ARGS.log_id+'_GEN.pth'
 
     TRAIN_DATALOADER = BatchMetaDataLoader(TRAIN_DATASET,
                                            batch_size=ARGS.batch_size,
@@ -211,4 +221,7 @@ if __name__ == '__main__':
                                           shuffle=True,
                                           num_workers=ARGS.num_workers)
     MODEL = Model(ARGS, TEST_DATASET.num_classes_per_task, OLD_SAVE_DIR).cuda()
-    test(TRAIN_DATALOADER, TEST_DATALOADER, MODEL, LOG_DIR)
+    GEN = Generator(ARGS, ARGS.z_dim).cuda()
+    GEN.load_state_dict(torch.load(GEN_PATH))
+    GEN.eval()
+    test(TRAIN_DATALOADER, TEST_DATALOADER, MODEL, GEN, LOG_DIR)

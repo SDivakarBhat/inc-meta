@@ -12,18 +12,24 @@ from torchvision.transforms import Compose, Resize, ToTensor
 import random
 import os
 import numpy as np
-from augmenter import Generator, Discriminator
+from augmenter_cgan import Generator, Discriminator
 
 class CategoricalAndLabels(Categorical):
 	def __call__(self, target):
 		label, class_augmentaion = target
 		return (self.classes[target],label)
 
-def train(dataloader, Model, gen, dis, log_dir, save_dir, args_path):
+def save(model, path):
+	torch.save(model.state_dict(), path)
+
+
+def train(dataloader, Model, gen, dis, log_dir, save_dir, save_gen_dir, args_path):
 	#params = list(Model.Classifier.parameters())+list(Model.decoder.parameters())	
+
+	adversarial_loss = torch.nn.MSELoss()
 	optimizer = torch.optim.Adam(filter(lambda p: p.requires_grad, Model.parameters()), lr = args.lr, weight_decay= args.wd)
-	gen_optim = torch.optim.Adam(gen.parameters(), lr=args.gen_lr)
-	dis_optim = torch.optim.Adam(dis.parameters(), lr=args.dis_lr)
+	gen_optim = torch.optim.Adam(gen.parameters(), lr=args.gen_lr, betas=(0.5, 0.999))
+	dis_optim = torch.optim.Adam(dis.parameters(), lr=args.dis_lr, betas=(0.5, 0.999))
 	scheduler = torch.optim.lr_scheduler.StepLR(optimizer, args.step_size, gamma=args.gamma)
 	epoch = 0
 	writer = SummaryWriter(log_dir=log_dir)	
@@ -31,6 +37,9 @@ def train(dataloader, Model, gen, dis, log_dir, save_dir, args_path):
 	while(epoch < args.max_epoch):
 		Model.train()
 
+		genloss = []
+		disloss = []
+		adv_loss = []
 		meter = []
 		entrpy = []
 		trip1_ = []
@@ -42,38 +51,52 @@ def train(dataloader, Model, gen, dis, log_dir, save_dir, args_path):
 		with tqdm(dataloader, total=args.max_episode, desc='Epoch {:d}'.format(epoch+1)) as pbar:
 			for idx, sample in enumerate(pbar):
 				optimizer.zero_grad()
-				loss, accuracy, logpy,v2w1,v2w2 = Model(sample)
 				imgs, lbls = sample['train']
-                		# imgs = imgs.cuda()
+				targets, _ = lbls				
+				loss, accuracy, logpy,v2w1,v2w2 = Model(sample)
+				# imgs = imgs.cuda()
                 		# print(np.shape(imgs.view(-1, *imgs.shape[2:])))
 				batch_size = np.shape(imgs.view(-1, *imgs.shape[2:]))[0]
-				real_labels = torch.ones(batch_size, 1, device='cuda')
+				real_labels = torch.ones(batch_size, 1, device=args.aug_gpu)
 				# real_labels = real_label
-				fake_labels = torch.zeros(batch_size, 1, device='cuda')
+				fake_labels = torch.zeros(batch_size, 1, device=args.aug_gpu)
 				# fake_labels = fake_labels.cuda()
-				z_noise = torch.randn(batch_size, args.zdim, device='cuda')
+				z_noise = torch.cuda.FloatTensor(np.random.normal(0, 1, (batch_size, args.zdim)))  # torch.randn(batch_size, args.zdim, device=args.aug_gpu)
 
 				loss.backward()
 				optimizer.step()
-				aug_in = imgs.view(-1, *imgs.shape[2:])
-				aug_in = aug_in.cuda()
-				dis_real = dis(aug_in)
-				dis_fake = dis(gen(z_noise))
-				dis_real_loss = F.binary_cross_entropy(dis_real, real_labels)
-				dis_fake_loss = F.binary_cross_entropy(dis_fake, fake_labels)
-				dis_loss = dis_fake_loss + dis_real_loss
-				dis_optim.zero_grad()
-				dis_loss.backward()
-				dis_optim.step()
-				z_noise = torch.randn(batch_size, args.zdim)
-				dis_fake = dis(gen(z_noise))
-				gen_loss = F.binary_cross_entropy(dis_fake, real_labels)
+
+				aug_in = imgs.view(-1, *imgs.shape[2:]).cuda()
+				lbl_in = torch.flatten(targets).cuda()
+				# aug_in = aug_in.to(args.aug_gpu)
+				gen_labels = torch.cuda.LongTensor(np.random.randint(0, args.num_base_classes, batch_size)).cuda()
+
+				gen_in = gen(z_noise, gen_labels)				
+				validity = dis(gen_in, gen_labels)
+				gen_loss = adversarial_loss(validity, real_labels)
 				gen_optim.zero_grad()
 				gen_loss.backward()
 				gen_optim.step()
 
+
+
+				dis_real = dis(aug_in, lbl_in)
+				dis_real_loss = adversarial_loss(dis_real, real_labels)
+
+				dis_fake = dis(gen_in.detach(), gen_labels)
+
+				dis_fake_loss = adversarial_loss(dis_fake, fake_labels)
+				dis_loss = (dis_fake_loss + dis_real_loss)/2
+				dis_optim.zero_grad()
+				dis_loss.backward()
+				dis_optim.step()
+				#z_noise = torch.randn(batch_size, args.zdim)
+				#dis_fake = dis(gen(z_noise))
+				
 				meter.append(accuracy)
 				entrpy.append(logpy)
+				genloss.append(gen_loss)
+				disloss.append(dis_loss)
 				#trip1_.append(trip1)
 				#trip2_.append(trip2)
 				v2w1_.append(v2w1)
@@ -87,7 +110,10 @@ def train(dataloader, Model, gen, dis, log_dir, save_dir, args_path):
 		print("Epoch {:0.2f} accuracy is {:0.2f}".format(epoch+1,(sum(meter)/len(meter))))
 		epoch += 1
 		writer.add_scalar('Accuracy',(sum(meter)/len(meter)),epoch)
-		#writer.add_scalar('CEntropy',(sum(entrpy)/len(entrpy)),epoch)
+		writer.add_scalar('Gen Loss', (sum(genloss))/(len(genloss)), epoch)
+		writer.add_scalar('Dis Loss', (sum(disloss))/(len(disloss)), epoch)
+		# writer.add_scalar('Adv Loss', (sum(adv_loss))/(len(adv_loss)), epoch)
+
 		#writer.add_scalar('triplet train',(sum(trip1_)/len(trip1_)),epoch)
 		#writer.add_scalar('triplet test',(sum(trip2_)/len(trip2_)),epoch)
 		writer.add_scalar('v2w train',(sum(v2w1_)/len(v2w1_)),epoch)
@@ -96,6 +122,7 @@ def train(dataloader, Model, gen, dis, log_dir, save_dir, args_path):
 		f.write("Epoch {:0.2f} accuracy is {:0.2f}\n".format(epoch+1,(sum(meter)/len(meter))))
 		
 	Model.base_save(save_dir)
+	save(gen, save_gen_dir)
 	f.close()
 if __name__=='__main__':
 	
@@ -136,10 +163,11 @@ if __name__=='__main__':
 	parse.add_argument('--seed', type=int, default='0')
 	parse.add_argument('--log_id',type=str)
 	parse.add_argument('--resume', type=str, default='False')
-	parse.add_argument('--gen_lr', type=float, default=0.02, help='learning \
+	parse.add_argument('--gen_lr', type=float, default=0.0002, help='learning \
                        rate')
-	parse.add_argument('--dis_lr', type=float, default=0.02, help='learning \
+	parse.add_argument('--dis_lr', type=float, default=0.0002, help='learning \
                        rate')
+	parse.add_argument('--aug_gpu', type=str, default='cuda')
 	args = parse.parse_args()
 	#word2vec = Word2Vec()
 	print(args)
@@ -166,6 +194,7 @@ if __name__=='__main__':
 				target_transform=CategoricalAndLabels(num_classes=5),
 				download=args.download)
 		log_dir = args.log_dir+'/{}'.format(args.dataset)+args.phase+args.log_id
+		save_gen_dir = args.save_dir +'/{}'.format(args.dataset)+args.phase+args.log_id+'_GEN.pth'
 		save_dir = args.save_dir+'/{}'.format(args.dataset)+args.phase+args.log_id+'.pth'
 	elif args.dataset=='miniimagenet':
 		dataset = miniimagenet(
@@ -179,6 +208,7 @@ if __name__=='__main__':
 				target_transform=CategoricalAndLabels(num_classes=5),
 				download=args.download)
 		log_dir = args.log_dir + '/{}'.format(args.dataset)+args.phase+args.log_id
+		save_gen_dir = args.save_dir +'/{}'.format(args.dataset)+args.phase+args.log_id+'_GEN.pth'
 		save_dir = args.save_dir+'/{}'.format(args.dataset)+args.phase+args.log_id+'.pth'
 
 	train_dataloader = BatchMetaDataLoader(
@@ -188,11 +218,11 @@ if __name__=='__main__':
 					num_workers=args.num_workers)
 	model = Model(args, dataset.num_classes_per_task)
 	model.cuda()
-	gen = Generator(args.zdim)
+	gen = Generator(args)#to(args.aug_gpu)
 	gen.cuda()
-	dis = Discriminator(args)
+	dis = Discriminator(args)#.to(args.aug_gpu)
 	dis.cuda()
 
-	train(train_dataloader, model, gen, dis, log_dir, save_dir, args_path)
+	train(train_dataloader, model, gen, dis, log_dir, save_dir, save_gen_dir, args_path)
 
 				
