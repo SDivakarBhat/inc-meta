@@ -9,7 +9,8 @@ from torch.utils.tensorboard import SummaryWriter
 from torchvision.transforms import Compose, Resize, ToTensor
 #def train_embedding():
 import random
-
+import os
+import numpy as np
 
 class CategoricalAndLabels(Categorical):
 	def __call__(self, target):
@@ -35,7 +36,7 @@ def train(dataloader, Model, log_dir, save_dir, args_path):
 		recon1_ =[]
 		recon2_ =[]
 		with tqdm(dataloader, total=args.max_episode, desc='Epoch {:d}'.format(epoch+1)) as pbar:
-			for idx,sample in enumerate(pbar):
+			for idx, sample in enumerate(pbar):
 				optimizer.zero_grad()
 				loss, accuracy, logpy,v2w1,v2w2 = Model(sample)
 				loss.backward()
@@ -99,6 +100,8 @@ if __name__=='__main__':
 	parse.add_argument('--num_classes', type=int, default=100)
 	parse.add_argument('--image_feat_dim', type=int, default=2048)
 	parse.add_argument('--device',type=str, default='cuda')
+	parse.add_argument('--gpu', type=str, default='1')
+	parse.add_argument('--seed', type=int, default='0')
 	parse.add_argument('--log_id',type=str)
 	parse.add_argument('--resume', type=str, default='False')
 	args = parse.parse_args()
@@ -108,6 +111,14 @@ if __name__=='__main__':
 	f = open(args_path,"w")
 	f.write(str(args))
 	f.close()
+	random.seed(args.seed)
+	np.random.seed(args.seed)
+	torch.manual_seed(args.seed)
+	torch.cuda.manual_seed(args.seed)
+	torch.backends.cudnn.deterministic = True
+	os.environ['CUDA_VISIBLE_DEVICES'] = args.gpu
+	# use_cuda = not args.no_cuda and torch.cuda.is_available()
+	device = torch.device(args.device)#torch.device('cuda' if use_cuda else 'cpu')pen(ARGS_PATH, "w")
 	if args.dataset=='cifar_fs':
 		dataset = cifar_fs(
 				args.data_folder,

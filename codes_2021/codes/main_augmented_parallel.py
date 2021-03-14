@@ -19,7 +19,11 @@ class CategoricalAndLabels(Categorical):
 		label, class_augmentaion = target
 		return (self.classes[target],label)
 
-def train(dataloader, Model, gen, dis, log_dir, save_dir, args_path):
+def save(model, path):
+	torch.save(model.state_dict(), path)
+
+
+def train(dataloader, Model, gen, dis, log_dir, save_dir, save_gen_dir, args_path):
 	#params = list(Model.Classifier.parameters())+list(Model.decoder.parameters())	
 	optimizer = torch.optim.Adam(filter(lambda p: p.requires_grad, Model.parameters()), lr = args.lr, weight_decay= args.wd)
 	gen_optim = torch.optim.Adam(gen.parameters(), lr=args.gen_lr)
@@ -42,21 +46,22 @@ def train(dataloader, Model, gen, dis, log_dir, save_dir, args_path):
 		with tqdm(dataloader, total=args.max_episode, desc='Epoch {:d}'.format(epoch+1)) as pbar:
 			for idx, sample in enumerate(pbar):
 				optimizer.zero_grad()
+				imgs, lbls = sample['train']				
 				loss, accuracy, logpy,v2w1,v2w2 = Model(sample)
-				imgs, lbls = sample['train']
-                		# imgs = imgs.cuda()
+				# imgs = imgs.cuda()
                 		# print(np.shape(imgs.view(-1, *imgs.shape[2:])))
 				batch_size = np.shape(imgs.view(-1, *imgs.shape[2:]))[0]
-				real_labels = torch.ones(batch_size, 1, device='cuda')
+				real_labels = torch.ones(batch_size, 1, device=args.aug_gpu)
 				# real_labels = real_label
-				fake_labels = torch.zeros(batch_size, 1, device='cuda')
+				fake_labels = torch.zeros(batch_size, 1, device=args.aug_gpu)
 				# fake_labels = fake_labels.cuda()
-				z_noise = torch.randn(batch_size, args.zdim, device='cuda')
+				z_noise = torch.randn(batch_size, args.zdim, device=args.aug_gpu)
 
 				loss.backward()
 				optimizer.step()
+
 				aug_in = imgs.view(-1, *imgs.shape[2:])
-				aug_in = aug_in.cuda()
+				# aug_in = aug_in.to(args.aug_gpu)
 				dis_real = dis(aug_in)
 				dis_fake = dis(gen(z_noise))
 				dis_real_loss = F.binary_cross_entropy(dis_real, real_labels)
@@ -96,6 +101,7 @@ def train(dataloader, Model, gen, dis, log_dir, save_dir, args_path):
 		f.write("Epoch {:0.2f} accuracy is {:0.2f}\n".format(epoch+1,(sum(meter)/len(meter))))
 		
 	Model.base_save(save_dir)
+	save(gen, save_gen_dir)
 	f.close()
 if __name__=='__main__':
 	
@@ -140,6 +146,7 @@ if __name__=='__main__':
                        rate')
 	parse.add_argument('--dis_lr', type=float, default=0.02, help='learning \
                        rate')
+	parse.add_argument('--aug_gpu', type=str, default='cuda')
 	args = parse.parse_args()
 	#word2vec = Word2Vec()
 	print(args)
@@ -166,6 +173,7 @@ if __name__=='__main__':
 				target_transform=CategoricalAndLabels(num_classes=5),
 				download=args.download)
 		log_dir = args.log_dir+'/{}'.format(args.dataset)+args.phase+args.log_id
+		save_gen_dir = args.save_dir +'/{}'.format(args.dataset)+args.phase+args.log_id+'_GEN.pth'
 		save_dir = args.save_dir+'/{}'.format(args.dataset)+args.phase+args.log_id+'.pth'
 	elif args.dataset=='miniimagenet':
 		dataset = miniimagenet(
@@ -179,6 +187,7 @@ if __name__=='__main__':
 				target_transform=CategoricalAndLabels(num_classes=5),
 				download=args.download)
 		log_dir = args.log_dir + '/{}'.format(args.dataset)+args.phase+args.log_id
+		save_gen_dir = args.save_dir +'/{}'.format(args.dataset)+args.phase+args.log_id+'_GEN.pth'
 		save_dir = args.save_dir+'/{}'.format(args.dataset)+args.phase+args.log_id+'.pth'
 
 	train_dataloader = BatchMetaDataLoader(
@@ -188,11 +197,11 @@ if __name__=='__main__':
 					num_workers=args.num_workers)
 	model = Model(args, dataset.num_classes_per_task)
 	model.cuda()
-	gen = Generator(args.zdim)
+	gen = Generator(args, args.zdim)#to(args.aug_gpu)
 	gen.cuda()
-	dis = Discriminator(args)
+	dis = Discriminator(args)#.to(args.aug_gpu)
 	dis.cuda()
 
-	train(train_dataloader, model, gen, dis, log_dir, save_dir, args_path)
+	train(train_dataloader, model, gen, dis, log_dir, save_dir, save_gen_dir, args_path)
 
 				

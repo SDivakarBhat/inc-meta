@@ -132,7 +132,7 @@ class Model(nn.Module):
 				}, save_path)
 
 
-	def forward(self, batch):
+	def forward(self, batch, flag=None):
 		##training phase (support)
 		train_inputs, train_targets = batch['train']
 		train_inputs = train_inputs.cuda()
@@ -246,7 +246,7 @@ class Model(nn.Module):
 		
 
 		##total loss
-		loss = fsl_loss + train_triplet_loss + test_triplet_loss + visual2word_loss_train + visual2word_loss_test #+ train_recon_loss + test_recon_loss
+		loss = fsl_loss + visual2word_loss_train + visual2word_loss_test # train_triplet_loss + test_triplet_loss + visual2word_loss_train + visual2word_loss_test #+ train_recon_loss + test_recon_loss
 		
 
 		##accuracy calculation

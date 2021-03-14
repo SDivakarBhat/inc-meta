@@ -11,6 +11,7 @@ from torchmeta.utils.prototype import get_prototypes, prototypical_loss
 import numpy as np
 from gensim.models import fasttext
 from gensim.test.utils import datapath
+torch.backends.cudnn.benchmark = False
 class Flatten(nn.Module):
 	def __init__(self):
 		super(Flatten, self).__init__()
@@ -95,6 +96,7 @@ class Model(nn.Module):
 
 	def forward(self, batch):
 		##training phase (support)
+		
 		train_inputs, train_targets = batch['train']
 		train_inputs = train_inputs.cuda()
 		train_targets, train_original_labels = train_targets

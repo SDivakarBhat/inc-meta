@@ -74,8 +74,8 @@ class Model(nn.Module):
 		self.visual2word_mse = nn.MSELoss()
 		self.classifier = Classifier(int(metric_dim*2), args.num_base_classes)	
 		self.target_classifier = Classifier(int(metric_dim*2),args.num_base_classes)
-                self.gen = Generator(args.z_dim)
-                self.dis = Discriminator()
+		#  self.gen = Generator(args.z_dim
+		# self.dis = Discriminator()
 		#self.reconstruction_loss = nn.MSELoss()
 		self.save_dir = save_dir
 		if self.args.dataset =='miniimagenet':
@@ -90,7 +90,7 @@ class Model(nn.Module):
 			self.text_branch.load_state_dict(checkpoint['text_branch'])
 			self.image_branch.load_state_dict(checkpoint['image_branch'])
 			self.visual2code.load_state_dict(checkpoint['visual2code'])
-		        self.code2word.load_state_dict(checkpoint['code2word'])
+			self.code2word.load_state_dict(checkpoint['code2word'])
 		        self.classifier.load_state_dict(checkpoint['base_classifier'])
 	                self.target_classifier.load_state_dict(checkpoint['base_classifier'])		
 			for param in self.classifier.parameters():
