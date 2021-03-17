@@ -247,7 +247,7 @@ class Model(nn.Module):
 			
 
 			##total loss
-			loss = fsl_loss + visual2word_loss_train + visual2word_loss_test # train_triplet_loss + test_triplet_loss + visual2word_loss_train + visual2word_loss_test #+ train_recon_loss + test_recon_loss
+			loss = fsl_loss #+ visual2word_loss_train + visual2word_loss_test # train_triplet_loss + test_triplet_loss + visual2word_loss_train + visual2word_loss_test #+ train_recon_loss + test_recon_loss
 			
 
 			##accuracy calculation
@@ -269,8 +269,35 @@ class Model(nn.Module):
 			#		return base_accuracy#, loss, logpy, base_logpy
 
 		else:
-			
-		
+			train_in = batch[0].cuda()
+			train_targets = batch[1].cuda()
+			train_visual_bridge, pre_pools = self.encoder(train_in)
+			train_visual_bridge  = torch.reshape(train_visual_bridge,(train_visual_bridge.size(0), train_visual_bridge.size(1)))
+			visual2code_out_train = self.visual2code(train_visual_bridge)
+			visual2word_out_train = self.code2word(visual2code_out_train)
+
+			test_in = batch[2].cuda()
+			test_targets = batch[3].cuda()
+			test_visual_bridge, pre_pools = self.encoder(test_in)
+			test_visual_bridge  = torch.reshape(test_visual_bridge,(test_visual_bridge.size(0), test_visual_bridge.size(1)))
+			visual2code_out_test = self.visual2code(test_visual_bridge)
+			visual2word_out_test = self.code2word(visual2code_out_test) 
+
+
+			train_embed_visual = self.image_branch(train_visual_bridge)
+			test_embed_visual = self.image_branch(test_visual_bridge)
+
+			train_concat_features_target = torch.cat((train_embed_visual, visual2word_out_train), dim=1) 
+			test_concat_features_target = torch.cat((test_embed_visual, visual2word_out_test), dim=1)
+
+			train_embeddings = self.classifier(train_concat_features_target)
+			test_embeddings = self.classifier(test_concat_features_target)
+			# print(np.shape(train_embeddings), np.shape(train_targets))
+			prototypes = get_prototypes(train_embeddings.unsqueeze(0), train_targets.unsqueeze(0), self.num_classes_per_task)
+			#print('proto',np.shape(prototypes))
+			loss = prototypical_loss(prototypes, test_embeddings.unsqueeze(0), test_targets.unsqueeze(0))
+			accuracy, logpy = get_accuracy(prototypes.cuda(), test_embeddings.unsqueeze(0), test_targets.unsqueeze(0))
+
 		return accuracy, loss# logpy#, visual2word_loss_train, visual2word_loss_test#, train_recon_loss, test_recon_loss
  
 

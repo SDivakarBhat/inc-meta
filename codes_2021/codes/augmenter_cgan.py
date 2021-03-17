@@ -41,6 +41,7 @@ class Generator(nn.Module):
 
     def forward(self, noise, labels):
         # Concatenate label embedding and image to produce input
+        # print('noise {}, labels {}'.format(np.shape(labels), np.shape(noise)))
         gen_input = torch.cat((self.label_emb(labels), noise), -1).cuda()
         img = self.model(gen_input)
         img = img.view(img.size(0), *img_shape)
