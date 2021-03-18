@@ -1,6 +1,6 @@
 import torch
 import numpy as np
-from torchmeta.datasets.helpers import cifar_fs, miniimagenet
+from torchmeta.datasets.helpers import cifar_fs, miniimagenet, tieredimagenet, cub
 from models_augmented_test import Model
 from torchmeta.utils.data import BatchMetaDataLoader
 from torchmeta.transforms import Categorical
@@ -10,6 +10,7 @@ from torchvision.transforms import Compose, Resize, ToTensor
 # def train_embedding():
 # import random
 from augmenter_cgan import Generator, Discriminator
+from torchmeta.datasets import TieredImagenet, CUB
 
 class CategoricalAndLabels(Categorical):
     """
@@ -89,8 +90,8 @@ def test(train_dataloader, test_dataloader, model, gen, log_dir):
         target_accuracy = sum(meter)/len(meter)
         base_accuracy = sum(meter_base)/len(meter_base)
         accuracy = (target_accuracy+base_accuracy)/2
-        print("Epoch {} of evaluation, accuracy={}".format(epoch+1,
-                                                            accuracy))
+        print("Epoch {} of evaluation, accuracy={}".format(epoch+1, accuracy))
+        writer.add_scalar('Eval Accuracy', ((base_accuracy+target_accuracy)/2), epoch+1)
         """
         with tqdm(train_dataloader, total=ARGS.max_episode) as pbar:
             for idx, sample in enumerate(pbar):
@@ -121,7 +122,7 @@ def test(train_dataloader, test_dataloader, model, gen, log_dir):
         epoch += 1
     print("Eval accuracy is {:0.2f}".format(accuracy))
     # epoch += 1
-    writer.add_scalar('Eval Accuracy', ((base_accuracy+target_accuracy)/2))
+    # writer.add_scalar('Eval Accuracy', ((base_accuracy+target_accuracy)/2))
     # writer.add_scalar('Base CEntropy',
     #                   (sum(base_entrpy)/len(base_entrpy)),epoch)
     # writer.add_scalar('Target CEntropy',(sum(entrpy)/len(entrpy)),epoch)
@@ -171,7 +172,7 @@ if __name__ == '__main__':
     parse.add_argument('-use_cuda', type=bool, default=True)
     parse.add_argument('--lr', type=float, default=1e-4, help='learning rate')
     parse.add_argument('--wd', type=float, default=1e-4, help='weight decay')
-    parse.add_argument('--max_epoch', type=int, default=50)
+    parse.add_argument('--max_epoch', type=int, default=200)
     parse.add_argument('--max_episode', type=int, default=100)
     parse.add_argument('--step_size', type=int, default=20)
     parse.add_argument('--gamma', type=float, default=0.5)
@@ -246,6 +247,60 @@ if __name__ == '__main__':
                                      + 'base' + ARGS.log_id+'.pth'
         # save_dir = ARGS.save_dir+'/{}'.format(ARGS.dataset)\
         #                         +ARGS.phase+ARGS.log_id+'.pth'
+    elif ARGS.dataset == 'tieredimagenet':
+        TRAIN_DATASET = tieredimagenet(ARGS.data_folder,
+                                     shots=ARGS.num_shots,
+                                     ways=ARGS.num_ways,
+                                     shuffle=True,
+                                     test_shots=15,
+                                     meta_train=True,
+                                     transform=Compose([Resize(32),
+                                                        ToTensor()]),
+                                     target_transform=CategoricalAndLabels(num_classes=5),
+                                     download=ARGS.download)
+
+        TEST_DATASET = tieredimagenet(ARGS.data_folder,
+                                    shots=ARGS.num_shots,
+                                    ways=ARGS.num_ways,
+                                    shuffle=True,
+                                    test_shots=15,
+                                    meta_test=True,
+                                    transform=Compose([Resize(32),
+                                                       ToTensor()]),
+                                    target_transform=CategoricalAndLabels(num_classes=5),
+                                    download=ARGS.download)
+        LOG_DIR = ARGS.log_dir + '/{}'.format(ARGS.dataset)\
+                               + ARGS.phase + ARGS.log_id
+        OLD_SAVE_DIR = ARGS.save_dir + '/{}'.format(ARGS.dataset)\
+                                     + 'base' + ARGS.log_id+'.pth'
+
+    elif ARGS.dataset == 'cub':
+        TRAIN_DATASET = cub(ARGS.data_folder,
+                                     shots=ARGS.num_shots,
+                                     ways=ARGS.num_ways,
+                                     shuffle=True,
+                                     test_shots=15,
+                                     meta_train=True,
+                                     transform=Compose([Resize((32, 32)),
+                                                        ToTensor()]),
+                                     target_transform=CategoricalAndLabels(num_classes=5),
+                                     download=ARGS.download)
+
+        TEST_DATASET = cub(ARGS.data_folder,
+                                    shots=ARGS.num_shots,
+                                    ways=ARGS.num_ways,
+                                    shuffle=True,
+                                    test_shots=15,
+                                    meta_test=True,
+                                    transform=Compose([Resize((32, 32)),
+                                                       ToTensor()]),
+                                    target_transform=CategoricalAndLabels(num_classes=5),
+                                    download=ARGS.download)
+        LOG_DIR = ARGS.log_dir + '/{}'.format(ARGS.dataset)\
+                               + ARGS.phase + ARGS.log_id
+        OLD_SAVE_DIR = ARGS.save_dir + '/{}'.format(ARGS.dataset)\
+                                     + 'base' + ARGS.log_id+'.pth'
+
     GEN_PATH = ARGS.save_dir + '/{}'.format(ARGS.dataset)\
                                      + 'base' + ARGS.log_id+'_GEN.pth'
 

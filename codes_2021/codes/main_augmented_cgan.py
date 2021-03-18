@@ -1,7 +1,7 @@
 import torch
 import torch.nn as nn
 import torch.nn.functional as F
-from torchmeta.datasets.helpers import cifar_fs, miniimagenet
+from torchmeta.datasets.helpers import cifar_fs, miniimagenet, tieredimagenet, cub
 from models import Model, Word2Vec
 from torchmeta.utils.data import BatchMetaDataLoader
 from torchmeta.transforms import Categorical
@@ -13,7 +13,8 @@ import random
 import os
 import numpy as np
 from augmenter_cgan import Generator, Discriminator
-
+from torchmeta.datasets import TieredImagenet, CUB
+from torchmeta.transforms import Categorical, ClassSplitter, Rotation
 class CategoricalAndLabels(Categorical):
 	def __call__(self, target):
 		label, class_augmentaion = target
@@ -48,6 +49,7 @@ def train(dataloader, Model, gen, dis, log_dir, save_dir, save_gen_dir, args_pat
 		v2w2_ = []
 		recon1_ =[]
 		recon2_ =[]
+		# print(dataloader)
 		with tqdm(dataloader, total=args.max_episode, desc='Epoch {:d}'.format(epoch+1)) as pbar:
 			for idx, sample in enumerate(pbar):
 				optimizer.zero_grad()
@@ -210,6 +212,58 @@ if __name__=='__main__':
 		log_dir = args.log_dir + '/{}'.format(args.dataset)+args.phase+args.log_id
 		save_gen_dir = args.save_dir +'/{}'.format(args.dataset)+args.phase+args.log_id+'_GEN.pth'
 		save_dir = args.save_dir+'/{}'.format(args.dataset)+args.phase+args.log_id+'.pth'
+	elif args.dataset=='tieredimagenet':
+			
+		dataset = tieredimagenet(
+				args.data_folder,
+				shots=args.num_shots,
+				ways=args.num_ways,
+				shuffle=True,
+				test_shots=15,
+				meta_train=True,
+				transform=Compose([Resize(32), ToTensor()]),
+				target_transform=CategoricalAndLabels(num_classes=5),
+				download=args.download
+)
+		"""
+		dataset = TieredImagenet(
+					args.data_folder,
+					num_classes_per_task=args.num_ways,
+					transform=Compose([Resize(32), ToTensor()]),
+					target_transform=CategoricalAndLabels(num_classes=5),
+					meta_train=True,
+					download=args.download)
+		dataset = ClassSplitter(dataset, shuffle=True, num_train_per_class=args.num_shots, num_test_per_class=args.num_test_shots)
+		"""
+		log_dir = args.log_dir + '/{}'.format(args.dataset)+args.phase+args.log_id
+		save_gen_dir = args.save_dir +'/{}'.format(args.dataset)+args.phase+args.log_id+'_GEN.pth'
+		save_dir = args.save_dir+'/{}'.format(args.dataset)+args.phase+args.log_id+'.pth'
+	elif args.dataset=='cub':
+		"""
+		dataset = cub(
+				args.data_folder,
+				shots=args.num_shots,
+				ways=args.num_ways,
+				shuffle=True,
+				test_shots=15,
+				meta_train=True,
+				transform=Compose([Resize(32), ToTensor()]),
+				target_transform=CategoricalAndLabels(num_classes=5),
+				download=args.download)
+		"""
+		dataset = CUB(
+					args.data_folder,
+					num_classes_per_task=args.num_ways,
+					transform=Compose([Resize((32, 32)), ToTensor()]),
+					target_transform=CategoricalAndLabels(num_classes=5),
+					meta_train=True,
+					download=args.download)
+		dataset = ClassSplitter(dataset, shuffle=True, num_train_per_class=args.num_shots, num_test_per_class=args.num_test_shots)
+
+		log_dir = args.log_dir + '/{}'.format(args.dataset)+args.phase+args.log_id
+		save_gen_dir = args.save_dir +'/{}'.format(args.dataset)+args.phase+args.log_id+'_GEN.pth'
+		save_dir = args.save_dir+'/{}'.format(args.dataset)+args.phase+args.log_id+'.pth'
+
 
 	train_dataloader = BatchMetaDataLoader(
 					dataset,

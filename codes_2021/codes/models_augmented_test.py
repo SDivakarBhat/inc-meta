@@ -147,6 +147,13 @@ class Model(nn.Module):
 				train_vecs = [self.d[code] for code in np.array(train_original_labels[0])]
 				#print(np.shape(np.array(train_vecs)), np.array(train_vecs))
 				train_vecs = self.word2vec(np.array(train_vecs)[np.newaxis]).cuda()
+			elif self.args.dataset=='cub':
+				labels = np.array([x.split('.')[1] for x in list(train_original_labels[0])])[np.newaxis]
+				# print(len(labels))
+				# n = len(labels)
+				# labels = labels.reshape(n, 1)
+				train_vecs = self.word2vec(labels).cuda()
+
 			train_triplet_target = torch.cat((train_targets, train_targets))
 			train_targets = train_targets.cuda()
 			train_triplet_target = torch.reshape(train_triplet_target,(self.args.batch_size*self.args.num_ways*self.args.num_shots*2,1)).cuda()
@@ -184,6 +191,13 @@ class Model(nn.Module):
 			elif self.args.dataset=='miniimagenet':
 				test_vecs = [self.d[code] for code in np.array(test_original_labels[0])]
 				test_vecs = self.word2vec(np.array(test_vecs)[np.newaxis]).cuda()
+			elif self.args.dataset=='cub':
+				labels = np.array([x.split('.')[1] for x in list(test_original_labels[0])])[np.newaxis]
+				# print(len(labels))
+				# n = len(labels)
+				# labels = labels.reshape(n, 1)
+				test_vecs = self.word2vec(labels).cuda()
+
 			#test_vecs = self.word2vec(np.transpose(np.array(test_original_labels)[:,1,:])).cuda()
 			test_triplet_target = torch.cat((test_targets, test_targets))
 			test_targets = test_targets.to(self.args.device)
