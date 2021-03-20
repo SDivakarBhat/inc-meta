@@ -1,4 +1,3 @@
-import sys
 import torch
 import numpy as np
 import os
@@ -98,15 +97,13 @@ class Model(nn.Module):
 	def forward(self, batch):
 		##training phase (support)
 		
-		train_inputs, train_targets = batch['train']
-		# print('TI',train_inputs, 'TT',train_targets)
+		train_inputs, train_targets = batch ['train']
 		train_inputs = train_inputs.cuda()
 		train_targets, train_original_labels = train_targets
 		train_original_labels = list(zip(*train_original_labels))
-		# print(np.shape(train_original_labels), np.shape(train_inputs), train_original_labels[0])
+		print(np.shape(train_original_labels), train_original_labels[0])
 
-		# print(np.transpose(np.array(train_original_labels))[:,1,:], train_targets)
-		# sys.exit(0)
+		print(train_original_labels[0], np.transpose(np.array(train_original_labels))[:,1,:], train_targets)
 		if self.args.dataset=='cifar_fs':
 			train_vecs = self.word2vec(np.transpose(np.array(train_original_labels)[:,1,:])).cuda()
 		elif self.args.dataset=='miniimagenet':
@@ -119,9 +116,6 @@ class Model(nn.Module):
 			# n = len(labels)
 			# labels = labels.reshape(n, 1)
 			train_vecs = self.word2vec(labels).cuda()
-		elif self.args.dataset=='tieredimagenet':
-			train_vecs = self.word2vec(np.transpose(np.array(train_original_labels)[:,1,:])).cuda()
-
 		train_triplet_target = torch.cat((train_targets, train_targets))
 		train_targets = train_targets.cuda()
 		train_triplet_target = torch.reshape(train_triplet_target,(self.args.batch_size*self.args.num_ways*self.args.num_shots*2,1)).cuda()
@@ -166,8 +160,6 @@ class Model(nn.Module):
 			# n = len(labels)
 			# labels = labels.reshape(n, 1)
 			test_vecs = self.word2vec(labels).cuda()
-		elif self.args.dataset=='tieredimagenet':
-			test_vecs = self.word2vec(np.transpose(np.array(test_original_labels)[:,1,:])).cuda()
 
 		test_triplet_target = torch.cat((test_targets, test_targets))
 		test_targets = test_targets.to(self.args.device)

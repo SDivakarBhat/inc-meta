@@ -1,10 +1,14 @@
 import torch
 import torch.nn as nn
 import torch.nn.functional as F
-from torchmeta.datasets.helpers import cifar_fs, miniimagenet, tieredimagenet, cub
+from torch.utils.data import DataLoader
+
+import learn2learn as l2l
+from learn2learn.data.transforms import NWays, KShots, LoadData, RemapLabels
+# from torchmeta.datasets.helpers import cifar_fs, miniimagenet, tieredimagenet, cub
 from models import Model, Word2Vec
-from torchmeta.utils.data import BatchMetaDataLoader
-from torchmeta.transforms import Categorical
+# from torchmeta.utils.data import BatchMetaDataLoader
+# from torchmeta.transforms import Categorical
 from tqdm import tqdm
 from torch.utils.tensorboard import SummaryWriter
 from torchvision.transforms import Compose, Resize, ToTensor
@@ -13,7 +17,7 @@ import random
 import os
 import numpy as np
 from augmenter_cgan import Generator, Discriminator
-from torchmeta.datasets import TieredImagenet, CUB
+# from torchmeta.datasets import TieredImagenet, CUB
 from torchmeta.transforms import Categorical, ClassSplitter, Rotation
 class CategoricalAndLabels(Categorical):
 	def __call__(self, target):
@@ -31,7 +35,7 @@ def train(dataloader, Model, gen, dis, log_dir, save_dir, save_gen_dir, args_pat
 	optimizer = torch.optim.Adam(filter(lambda p: p.requires_grad, Model.parameters()), lr = args.lr, weight_decay= args.wd)
 	gen_optim = torch.optim.Adam(gen.parameters(), lr=args.gen_lr, betas=(0.5, 0.999))
 	dis_optim = torch.optim.Adam(dis.parameters(), lr=args.dis_lr, betas=(0.5, 0.999))
-	# scheduler = torch.optim.lr_scheduler.StepLR(optimizer, args.step_size, gamma=args.gamma)
+	scheduler = torch.optim.lr_scheduler.StepLR(optimizer, args.step_size, gamma=args.gamma)
 	epoch = 0
 	writer = SummaryWriter(log_dir=log_dir)	
 	f = open(args_path,"a")
@@ -50,8 +54,12 @@ def train(dataloader, Model, gen, dis, log_dir, save_dir, save_gen_dir, args_pat
 		recon1_ =[]
 		recon2_ =[]
 		# print(dataloader)
+		sample = next(iter(dataloader))
+		print(sample)
 		with tqdm(dataloader, total=args.max_episode, desc='Epoch {:d}'.format(epoch+1)) as pbar:
-			for idx, sample in enumerate(pbar):
+			#for idx, sample in enumerate(pbar):
+				sample = next(iter(pbar))
+				print(sample)
 				optimizer.zero_grad()
 				imgs, lbls = sample['train']
 				targets, _ = lbls				
@@ -107,7 +115,7 @@ def train(dataloader, Model, gen, dis, log_dir, save_dir, save_gen_dir, args_pat
 				#recon2_.append(recon2)
 				if idx>=args.max_episode:
 					break
-		# scheduler.step()
+		#scheduler.step()
 		#random.shuffle(dataloader)
 		print("Epoch {:0.2f} accuracy is {:0.2f}".format(epoch+1,(sum(meter)/len(meter))))
 		epoch += 1
@@ -185,78 +193,35 @@ if __name__=='__main__':
 	os.environ['CUDA_VISIBLE_DEVICES'] = args.gpu
 	# use_cuda = not args.no_cuda and torch.cuda.is_available()
 	device = torch.device(args.device)#torch.device('cuda' if use_cuda else 'cpu')pen(ARGS_PATH, "w")
-	if args.dataset=='cifar_fs':
-		dataset = cifar_fs(
-				args.data_folder,
-				shots=args.num_shots,
-				ways=args.num_ways,
-				shuffle=True,
-				test_shots=15,
-				meta_train=True,
-				target_transform=CategoricalAndLabels(num_classes=5),
-				download=args.download)
-		log_dir = args.log_dir+'/{}_{}_n={}_k={}_lr={}_{}'.format(args.dataset, args.phase, args.num_ways, args.num_shots, args.lr, args.log_id)
-		save_gen_dir = args.save_dir +'/{}_{}_n={}_k={}_lr={}_{}'.format(args.dataset, args.phase, args.num_ways, args.num_shots, args.lr, args.log_id)+'_GEN.pth'
-		save_dir = args.save_dir+'/{}_{}_n={}_k={}_lr={}_{}'.format(args.dataset, args.phase, args.num_ways, args.num_shots, args.lr, args.log_id)+'.pth'
-	elif args.dataset=='miniimagenet':
-		dataset = miniimagenet(
-				args.data_folder,
-				shots=args.num_shots,
-				ways=args.num_ways,
-				shuffle=True,
-				test_shots=15,
-				meta_train=True,
-				transform=Compose([Resize(32), ToTensor()]),
-				target_transform=CategoricalAndLabels(num_classes=5),
-				download=args.download)
-		log_dir = args.log_dir+'/{}_{}_n={}_k={}_lr={}_{}'.format(args.dataset, args.phase, args.num_ways, args.num_shots, args.lr, args.log_id)
-		save_gen_dir = args.save_dir +'/{}_{}_n={}_k={}_lr={}_{}'.format(args.dataset, args.phase, args.num_ways, args.num_shots, args.lr, args.log_id)+'_GEN.pth'
-		save_dir = args.save_dir+'/{}_{}_n={}_k={}_lr={}_{}'.format(args.dataset, args.phase, args.num_ways, args.num_shots, args.lr, args.log_id)+'.pth'
+	if args.dataset=='tieredimagenet':
+		path_data = args.data_folder #+'/tieredimagenet'
+		train_dataset = l2l.vision.datasets.TieredImagenet(root=path_data, transform=Compose([Resize(32), ToTensor()]), mode='train')
+    		# valid_dataset = l2l.vision.datasets.MiniImagenet(root=path_data, mode='validation')
+    		# test_dataset = l2l.vision.datasets.TieredImagenet(root=path_data, mode='test')	
 
-
-	elif args.dataset=='tieredimagenet':
-			
-		dataset = tieredimagenet(
-				args.data_folder,
-				shots=args.num_shots,
-				ways=args.num_ways,
-				shuffle=True,
-				test_shots=15,
-				meta_train=True,
-				transform=Compose([Resize(32), ToTensor()]),
-				target_transform=CategoricalAndLabels(num_classes=5),
-				download=args.download)
-		log_dir = args.log_dir+'/{}_{}_n={}_k={}_lr={}_{}'.format(args.dataset, args.phase, args.num_ways, args.num_shots, args.lr, args.log_id)
-		save_gen_dir = args.save_dir +'/{}_{}_n={}_k={}_lr={}_{}'.format(args.dataset, args.phase, args.num_ways, args.num_shots, args.lr, args.log_id)+'_GEN.pth'
-		save_dir = args.save_dir+'/{}_{}_n={}_k={}_lr={}_{}'.format(args.dataset, args.phase, args.num_ways, args.num_shots, args.lr, args.log_id)+'.pth'
-		
-	elif args.dataset=='cub':
-		dataset = CUB(
-					args.data_folder,
-					num_classes_per_task=args.num_ways,
-					transform=Compose([Resize((32, 32)), ToTensor()]),
-					target_transform=CategoricalAndLabels(num_classes=5),
-					meta_train=True,
-					download=args.download)
-		dataset = ClassSplitter(dataset, shuffle=True, num_train_per_class=args.num_shots, num_test_per_class=args.num_test_shots)
-		log_dir = args.log_dir+'/{}_{}_n={}_k={}_lr={}_{}'.format(args.dataset, args.phase, args.num_ways, args.num_shots, args.lr, args.log_id)
-		save_gen_dir = args.save_dir +'/{}_{}_n={}_k={}_lr={}_{}'.format(args.dataset, args.phase, args.num_ways, args.num_shots, args.lr, args.log_id)+'_GEN.pth'
-		save_dir = args.save_dir+'/{}_{}_n={}_k={}_lr={}_{}'.format(args.dataset, args.phase, args.num_ways, args.num_shots, args.lr, args.log_id)+'.pth'
+		train_dataset = l2l.data.MetaDataset(train_dataset)
+		train_transforms = [
+					NWays(train_dataset, args.num_ways),
+					KShots(train_dataset, args.num_shots),
+					LoadData(train_dataset),
+					RemapLabels(train_dataset)
+				]
+		train_tasks = l2l.data.TaskDataset(train_dataset, task_transforms=train_transforms)
+		train_loader = DataLoader(train_tasks, pin_memory=True, shuffle=True)
 
 		
-
-	train_dataloader = BatchMetaDataLoader(
-					dataset,
-					batch_size=args.batch_size,
-					shuffle=True,
-					num_workers=args.num_workers)
-	model = Model(args, dataset.num_classes_per_task)
+		log_dir = args.log_dir + '/{}'.format(args.dataset)+args.phase+args.log_id
+		save_gen_dir = args.save_dir +'/{}'.format(args.dataset)+args.phase+args.log_id+'_GEN.pth'
+		save_dir = args.save_dir+'/{}'.format(args.dataset)+args.phase+args.log_id+'.pth'
+	
+	
+	model = Model(args, args.num_ways)
 	model.cuda()
 	gen = Generator(args)#to(args.aug_gpu)
 	gen.cuda()
 	dis = Discriminator(args)#.to(args.aug_gpu)
 	dis.cuda()
 
-	train(train_dataloader, model, gen, dis, log_dir, save_dir, save_gen_dir, args_path)
+	train(train_loader, model, gen, dis, log_dir, save_dir, save_gen_dir, args_path)
 
 				

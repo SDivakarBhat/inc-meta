@@ -153,6 +153,8 @@ class Model(nn.Module):
 				# n = len(labels)
 				# labels = labels.reshape(n, 1)
 				train_vecs = self.word2vec(labels).cuda()
+			elif self.args.dataset=='tieredimagenet':
+				train_vecs = self.word2vec(np.transpose(np.array(train_original_labels)[:,1,:])).cuda()
 
 			train_triplet_target = torch.cat((train_targets, train_targets))
 			train_targets = train_targets.cuda()
@@ -197,6 +199,8 @@ class Model(nn.Module):
 				# n = len(labels)
 				# labels = labels.reshape(n, 1)
 				test_vecs = self.word2vec(labels).cuda()
+			elif self.args.dataset=='tieredimagenet':
+				test_vecs = self.word2vec(np.transpose(np.array(test_original_labels)[:,1,:])).cuda()
 
 			#test_vecs = self.word2vec(np.transpose(np.array(test_original_labels)[:,1,:])).cuda()
 			test_triplet_target = torch.cat((test_targets, test_targets))
