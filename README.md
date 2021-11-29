@@ -4,7 +4,7 @@ Official implementation of [[SemGIF](https://www.bmvc2021-virtualconference.com/
 
 
 <p align='center'>
-    <img src="semgif-readme.png", width="360">
+    <img src="semgif-readme.png", width="700">
 </p>
 
 
