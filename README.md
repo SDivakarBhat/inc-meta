@@ -1,6 +1,12 @@
 # SemGIF: A Semantics Guided Incremental Few-shot Learning Framework with Generative Replay
 
-Simple overview of use/purpose.
+Official implementation of [[SemGIF](https://www.bmvc2021-virtualconference.com/assets/papers/0673.pdf)].
+
+
+<p align='center'>
+    <img src="semgif-readme.png", width="360">
+</p>
+
 
 ## Description
 
