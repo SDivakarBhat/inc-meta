@@ -21,22 +21,29 @@ The complete paper can be found here: https://www.bmvc2021-virtualconference.com
 
 * For information on the installation  and usage of the torchmeta library visit: https://github.com/tristandeleu/pytorch-meta
 
-//### Executing program
+<!--### Executing program
 
-//* To run the main 
-//* Step-by-step bullets
-//```
-//code blocks for commands
-//```
+* To run the main 
+* Step-by-step bullets
+```
+code blocks for commands
+```-->
 
 ## Authors
 
-Contributors names and contact info
-
-ex. Dominique Pizzie  
-ex. [@DomPizzie](https://twitter.com/dompizzie)
+S Divakar Bhat, Biplab Banerjee, Subhasis Chaudhuri
 
 
-## License
+## Citation
+> S Divakar Bhat, Biplab Banerjee and Subhasis Chaudhuri. SemGIF: A Semantics Guided Incremental Few-shot Learning Framework with Generative Replay, The 32nd British Machine Vision Conference 2021, [[bmvc2021]https://www.bmvc2021-virtualconference.com/assets/papers/0673.pdf]
 
-This project is licensed under the [NAME HERE] License - see the LICENSE.md file for details
+If you want to cite, use the following Bibtex entry:
+```
+@inproceedings{sdbhatsemgif,
+  title={SemGIF: A Semantics Guided Incremental Few-shot Learning Framework with Generative Replay},
+  author={Bhat, S Divakar and Banerjee, Biplab and Chaudhuri, Subhasis},
+  booktitle={BMVC},
+  pages={},
+  year={2021}
+}
+```
