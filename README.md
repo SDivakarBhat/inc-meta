@@ -35,7 +35,7 @@ S Divakar Bhat, Biplab Banerjee, Subhasis Chaudhuri
 
 
 ## Citation
-> S Divakar Bhat, Biplab Banerjee and Subhasis Chaudhuri. SemGIF: A Semantics Guided Incremental Few-shot Learning Framework with Generative Replay, The 32nd British Machine Vision Conference 2021, [[bmvc2021]https://www.bmvc2021-virtualconference.com/assets/papers/0673.pdf]
+> S Divakar Bhat, Biplab Banerjee and Subhasis Chaudhuri. SemGIF: A Semantics Guided Incremental Few-shot Learning Framework with Generative Replay, The 32nd British Machine Vision Conference 2021, [[bmvc2021](https://www.bmvc2021-virtualconference.com/assets/papers/0673.pdf)]
 
 If you want to cite, use the following Bibtex entry:
 ```
