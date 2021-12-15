@@ -45,11 +45,9 @@ S Divakar Bhat, Biplab Banerjee, Subhasis Chaudhuri
 
 If you want to cite, use the following Bibtex entry:
 ```
-@inproceedings{sdbhatsemgif,
+@article{bhat2021semgif,
   title={SemGIF: A Semantics Guided Incremental Few-shot Learning Framework with Generative Replay},
   author={Bhat, S Divakar and Banerjee, Biplab and Chaudhuri, Subhasis},
-  booktitle={BMVC},
-  pages={},
   year={2021}
 }
 ```
